@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  news-service:
+    build: .
+    command: gunicorn news_aggregator.wsgi:application --bind 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=news_aggregator.settings
+    restart: on-failure
+
+  celery-worker:
+    build: .
+    command: celery -A news_aggregator worker -l info -P eventlet
+    volumes:
+      - .:/app
+    depends_on:
+      - news-service
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=news_aggregator.settings
+    restart: on-failure
+
+  celery-beat:
+    build: .
+    command: celery -A news_aggregator beat -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - news-service
+      - redis
+    environment:
+      - DJANGO_SETTINGS_MODULE=news_aggregator.settings
+    restart: on-failure
+
+  db:
+    image: postgres:12
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - "POSTGRES_DB=news_aggregator"
+      - "POSTGRES_HOST_AUTH_METHOD=trust"
+      - "POSTGRES_USER=postgres"
+      - "POSTGRES_PASSWORD=fed123321"
+    ports:
+      - 5432:5432
+
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    environment:
+      - "REDIS_PORT=6379"
+
+volumes:
+  postgres_data:
